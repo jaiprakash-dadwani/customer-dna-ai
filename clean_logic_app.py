@@ -9,7 +9,7 @@ from datetime import datetime
 from config import RISK_THRESHOLDS, RISK_LEVELS, VALIDATION_LIMITS, PROFILE_MULTIPLIERS
 from utils import safe_rerun, validate_input, limit_location_history
 
-st.set_page_config(page_title="Customer DNA AI - Clean Logic", page_icon="🧬", layout="wide")
+st.set_page_config(page_title="Customer DNA AI", page_icon="🧬", layout="wide")
 
 # Demo-Ready Customer Profiles - 3 Core Professions
 CUSTOMERS = {
@@ -339,7 +339,7 @@ def main():
         <div style='display: flex; align-items: center; gap: 1rem;'>
             <div style='font-size: 2.5rem;'>🧬</div>
             <div>
-                <h1 style='margin: 0; font-size: 2rem; font-weight: 600; font-family: Mulish, sans-serif;'>Customer DNA AI - Clean Logic</h1>
+                <h1 style='margin: 0; font-size: 2rem; font-weight: 600; font-family: Mulish, sans-serif;'>Customer DNA AI</h1>
                 <p style='margin: 0.5rem 0 0 0; opacity: 0.9; font-family: Mulish, sans-serif; font-weight: 400;'>Real-time Risk Assessment & Intervention System</p>
             </div>
         </div>
