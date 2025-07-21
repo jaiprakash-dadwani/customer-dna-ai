@@ -6,6 +6,8 @@ import streamlit as st
 import pandas as pd
 import time
 from datetime import datetime
+from config import RISK_THRESHOLDS, RISK_LEVELS, VALIDATION_LIMITS, PROFILE_MULTIPLIERS
+from utils import safe_rerun, validate_input, limit_location_history
 
 st.set_page_config(page_title="Customer DNA AI - Clean Logic", page_icon="🧬", layout="wide")
 
@@ -29,255 +31,145 @@ CUSTOMERS = {
 }
 
 def calculate_risk(profile, session_data):
-    """Enhanced risk calculation using ML + RL hybrid model"""
+    """Enhanced risk calculation with learning ML system"""
     try:
-        # Try to use RL-enhanced model if available
-        from rl_enhanced_model import RLEnhancedCustomerDNAModel
+        # Use fixed ML system that learns from data
+        from fixed_ml_system import fixed_ml
         
-        # Create customer data for AI prediction
-        customer_data = pd.DataFrame({
-            'age': [profile['age']],
-            'income': [profile['income']],
-            'occupation': [profile['occupation']],
-            'total_deposits': [sum(session_data.get('deposits', []))],
-            'sessions_per_week': [session_data.get('sessions_per_week', 12)],
-            'avg_session_minutes': [session_data['session_time']],
-            'support_contacts': [profile['support_contacts'] + session_data['support_calls']],
-            'financial_stress_score': [profile['financial_stress']],
-            'days_since_last_session': [1.0],
-            'session_variance': [2.5],
-            'weekend_gambling_ratio': [0.6],
-            'late_night_sessions': [3 if session_data['location'] == 'Home' else 1],
-            'spending_acceleration': [1.5 if len(session_data.get('deposits', [])) > 2 else 1.0],
-            'loss_chasing_indicator': [1 if session_data['wagered'] > sum(session_data.get('deposits', [])) * 0.8 else 0],
-            'credit_score': [650 - profile['financial_stress'] * 20],
-            'debt_to_income': [profile['financial_stress'] / 20],
-            'employment_stability': [5.0 - profile['financial_stress'] * 0.3]
-        })
+        # Get ML prediction (pure ML, no hardcoded rules)
+        ml_prediction = fixed_ml.predict_risk(profile, session_data)
         
-        # Load or create AI model (simplified for demo)
-        ai_risk_score = min(100, max(0, 
-            profile['financial_stress'] * 8 + 
-            len(session_data.get('deposits', [])) * 5 +
-            (session_data['wagered'] / (profile['income']/12)) * 30 +
-            session_data['support_calls'] * 7 +
-            (session_data['session_time'] / 60) * 2
-        ))
+        # Add this interaction to training data for continuous learning
+        fixed_ml.add_training_sample(profile, session_data)
         
-        # Initialize RL model for enhanced recommendations
-        rl_model = RLEnhancedCustomerDNAModel()
+        ml_risk_score = ml_prediction['risk_score']
+        ml_confidence = ml_prediction['confidence']
+        ml_method = ml_prediction['method']
+        ml_samples = ml_prediction.get('samples_used', 0)
         
-        # Get RL-enhanced recommendation
-        rl_recommendation = rl_model.recommend_intervention(customer_data.iloc[0].to_dict())
-        
-        # Enhanced risk calculation with ML + RL insights
-        risk_score = rl_recommendation['ml_risk_score']
-        rl_action = rl_recommendation['rl_action']
-        rl_confidence = rl_recommendation['confidence']
-        
-    except ImportError:
-        # Fallback to original calculation
-        pass
+    except Exception as e:
+        print(f"ML Error: {e}")
+        # Pure rule-based fallback
+        ml_risk_score = 50  # Default
+        ml_confidence = 0.5
+        ml_method = 'error_fallback'
+        ml_samples = 0
     
-    # Original calculation variables (always defined)
-    balance = session_data['balance']
-    wagered = session_data['wagered'] 
-    session_time = session_data['session_time']
-    location = session_data['location']
-    support_calls = session_data['support_calls']
+
     
-    risk_score = 0
-    factors = {}
+    # Always calculate rule-based factors for comparison and display
+    deposits = session_data.get('deposits', [])
+    wagers = session_data.get('wagers', [])
     monthly_income = profile['income'] / 12
     
-    # 1. Deposit Risk (0-25 points) - FIXED
-    deposits = session_data.get('deposits', [])
-    total_deposits = sum(deposits)
-    deposit_count = len(deposits)
+    # Rule-based calculation for factors
+    factors = {}
+    rule_risk_score = 0
     
-    # Base deposit risk from total amount
-    if total_deposits > 0:
-        deposit_ratio = total_deposits / monthly_income
-        
-        if deposit_ratio > 3.0:
-            deposit_risk = 25
-        elif deposit_ratio > 2.0:
-            deposit_risk = 22
-        elif deposit_ratio > 1.5:
-            deposit_risk = 18
+    # Deposit Risk (0-25)
+    if deposits:
+        deposit_ratio = sum(deposits) / monthly_income if monthly_income > 0 else 0
+        if deposit_ratio > 2.0:
+            deposit_factor = 25
         elif deposit_ratio > 1.0:
-            deposit_risk = 15
+            deposit_factor = 18
         elif deposit_ratio > 0.5:
-            deposit_risk = 10
+            deposit_factor = 12
         else:
-            deposit_risk = 5
-        
-        # Frequency escalation
-        if deposit_count > 8:
-            deposit_risk += 8
-        elif deposit_count > 5:
-            deposit_risk += 5
-        elif deposit_count > 3:
-            deposit_risk += 3
-        
-        # Profile multipliers
-        if profile['risk_category'] == 'Critical':
-            deposit_risk = min(25, int(deposit_risk * 1.4))
-        elif profile['risk_category'] == 'High':
-            deposit_risk = min(25, int(deposit_risk * 1.2))
-        
-        # Large single deposit bonus
-        if deposits and max(deposits) > monthly_income:
-            deposit_risk += 5
+            deposit_factor = 5
+        deposit_factor += min(5, len(deposits))
     else:
-        deposit_risk = 0
+        deposit_factor = 0
+    factors['Deposit'] = min(25, deposit_factor)
+    rule_risk_score += factors['Deposit']
     
-    factors['Deposit'] = min(25, deposit_risk)
-    risk_score += factors['Deposit']
-    
-    # 2. Spending Risk (0-25 points) - ENHANCED
-    wagers = session_data.get('wagers', [])
-    wager_count = len(wagers)
-    
-    if wagered > 0:
-        spend_ratio = wagered / monthly_income
-        monthly_limit = profile.get('monthly_limit', monthly_income)
-        limit_ratio = wagered / monthly_limit
-        
-        # Base spending risk
-        if spend_ratio > 2.0:
-            spend_risk = 25
-        elif spend_ratio > 1.5:
-            spend_risk = 22
+    # Spending Risk (0-25)
+    if session_data['wagered'] > 0:
+        spend_ratio = session_data['wagered'] / monthly_income if monthly_income > 0 else 0
+        if spend_ratio > 1.5:
+            spend_factor = 25
         elif spend_ratio > 1.0:
-            spend_risk = 18
+            spend_factor = 20
         elif spend_ratio > 0.5:
-            spend_risk = 15
-        elif spend_ratio > 0.2:
-            spend_risk = 10
+            spend_factor = 15
         else:
-            spend_risk = 5
-        
-        # Monthly limit breach
-        if limit_ratio > 1.0:
-            spend_risk += 8
-        elif limit_ratio > 0.8:
-            spend_risk += 5
-        
-        # Wager frequency
-        if wager_count > 10:
-            spend_risk += 5
-        elif wager_count > 5:
-            spend_risk += 3
-        
-        # Profile adjustments
-        if profile['risk_category'] == 'Critical':
-            spend_risk = min(25, int(spend_risk * 1.3))
-        elif profile['risk_category'] == 'High':
-            spend_risk = min(25, int(spend_risk * 1.1))
+            spend_factor = 8
+        spend_factor += min(5, len(wagers))
     else:
-        spend_risk = 0
+        spend_factor = 0
+    factors['Spending'] = min(25, spend_factor)
+    rule_risk_score += factors['Spending']
     
-    factors['Spending'] = min(25, spend_risk)
-    risk_score += factors['Spending']
-    
-    # 3. Session Risk (0-20 points)
-    session_ratio = session_time / profile['avg_session']
+    # Session Risk (0-20)
+    session_ratio = session_data['session_time'] / profile['avg_session'] if profile['avg_session'] > 0 else 1
     if session_ratio > 2.0:
-        session_risk = 20
+        session_factor = 20
     elif session_ratio > 1.5:
-        session_risk = 15
-    elif session_ratio > 1.2:
-        session_risk = 10
+        session_factor = 15
     else:
-        session_risk = 5
-    factors['Session'] = session_risk
-    risk_score += session_risk
+        session_factor = 8
+    factors['Session'] = session_factor
+    rule_risk_score += session_factor
     
-    # 4. Location Risk (0-15 points) - Enhanced
-    location_visits = session_data.get('location_history', [])
-    
-    # Base location risk
+    # Location Risk (0-15)
+    location = session_data['location']
     if location in ['Casino', 'Betting Shop']:
-        location_risk = 15
+        location_factor = 15
     elif location == 'Work':
-        location_risk = 10
-    elif location == 'Public':
-        location_risk = 8
+        location_factor = 10
     else:
-        location_risk = 5
+        location_factor = 5
+    factors['Location'] = location_factor
+    rule_risk_score += location_factor
     
-    # Location pattern analysis
-    if location_visits:
-        high_risk_visits = sum(1 for loc in location_visits if loc in ['Casino', 'Betting Shop'])
-        if high_risk_visits > 3:
-            location_risk = min(15, location_risk + 5)
-        elif high_risk_visits > 1:
-            location_risk = min(15, location_risk + 3)
-    
-    # Profile-based location sensitivity
-    if profile['risk_category'] == 'Critical' and location in ['Casino', 'Betting Shop']:
-        location_risk = 15
-    elif profile['risk_category'] == 'High' and location in ['Casino', 'Betting Shop']:
-        location_risk = min(15, location_risk + 2)
-    
-    factors['Location'] = location_risk
-    risk_score += location_risk
-    
-    # 5. Support Risk (0-15 points) - Enhanced
-    base_support = profile['support_contacts']
-    live_support = support_calls
-    total_support = base_support + live_support
-    
-    # Base support risk
-    if total_support > 15:
-        support_risk = 15
-    elif total_support > 10:
-        support_risk = 12
+    # Support Risk (0-15)
+    total_support = profile['support_contacts'] + session_data['support_calls']
+    if total_support > 10:
+        support_factor = 15
     elif total_support > 5:
-        support_risk = 10
-    elif total_support > 2:
-        support_risk = 8
+        support_factor = 12
     else:
-        support_risk = 5
+        support_factor = 6
+    support_factor += profile['financial_stress']
+    factors['Support'] = min(15, support_factor)
+    rule_risk_score += factors['Support']
     
-    # Recent support escalation
-    if live_support > 5:
-        support_risk = 15
-    elif live_support > 3:
-        support_risk = min(15, support_risk + 3)
-    elif live_support > 1:
-        support_risk = min(15, support_risk + 2)
+    # Apply profile multiplier
+    multiplier = PROFILE_MULTIPLIERS.get(profile['risk_category'], PROFILE_MULTIPLIERS['Medium'])
+    rule_risk_score *= multiplier['overall']
+    rule_risk_score = min(100, int(rule_risk_score))
     
-    # Profile-based support sensitivity
-    if profile['risk_category'] == 'Critical':
-        support_risk = min(15, int(support_risk * 1.2))
-    elif profile['emotional_state'] in ['Crisis', 'Distressed']:
-        support_risk = min(15, support_risk + 3)
+    # Use ML score if available and confident, otherwise use rule-based
+    if ml_method == 'ml_prediction' and ml_confidence > 0.7:
+        final_score = ml_risk_score
+        # Scale factors to match ML score
+        if rule_risk_score > 0:
+            scale = final_score / rule_risk_score
+            factors = {k: min(25 if k in ['Deposit', 'Spending'] else 20 if k == 'Session' else 15, 
+                             int(v * scale)) for k, v in factors.items()}
+    else:
+        final_score = rule_risk_score
     
-    factors['Support'] = support_risk
-    risk_score += support_risk
-    
-    # Profile multiplier
-    if profile['risk_category'] == 'Critical':
-        risk_score *= 1.2
-    elif profile['risk_category'] == 'High':
-        risk_score *= 1.1
-    
-    # Overall risk level
-    if risk_score >= 80:
+    # Determine risk level
+    if final_score >= 80:
         risk_level = "CRITICAL"
-    elif risk_score >= 60:
+    elif final_score >= 60:
         risk_level = "HIGH"
-    elif risk_score >= 40:
+    elif final_score >= 40:
         risk_level = "MEDIUM"
     else:
         risk_level = "LOW"
     
     return {
-        'score': min(100, int(risk_score)),
+        'score': final_score,
         'level': risk_level,
-        'factors': factors
+        'factors': factors,
+        'ml_used': ml_method == 'ml_prediction',
+        'ml_confidence': ml_confidence,
+        'ml_method': ml_method,
+        'ml_samples': ml_samples,
+        'rule_score': rule_risk_score,
+        'learning_active': True
     }
 
 def get_interventions(risk_result, profile):
@@ -285,11 +177,11 @@ def get_interventions(risk_result, profile):
     interventions = []
     factors = risk_result['factors']
     
-    if factors['Deposit'] >= 8:  # Sensitive threshold
-        if factors['Deposit'] >= 22:
+    if factors['Deposit'] >= RISK_THRESHOLDS['DEPOSIT_LOW']:
+        if factors['Deposit'] >= RISK_THRESHOLDS['DEPOSIT_HIGH']:
             urgency = 'CRITICAL'
             action = 'Immediate deposit intervention - Multiple large deposits detected'
-        elif factors['Deposit'] >= 15:
+        elif factors['Deposit'] >= RISK_THRESHOLDS['DEPOSIT_MEDIUM']:
             urgency = 'HIGH'
             action = 'Deposit monitoring - Pattern of concern identified'
         else:
@@ -302,11 +194,11 @@ def get_interventions(risk_result, profile):
             'action': action
         })
     
-    if factors['Spending'] >= 8:  # Sensitive threshold
-        if factors['Spending'] >= 22:
+    if factors['Spending'] >= RISK_THRESHOLDS['SPENDING_LOW']:
+        if factors['Spending'] >= RISK_THRESHOLDS['SPENDING_HIGH']:
             urgency = 'CRITICAL'
             action = 'Immediate spend intervention - Excessive wagering detected'
-        elif factors['Spending'] >= 15:
+        elif factors['Spending'] >= RISK_THRESHOLDS['SPENDING_MEDIUM']:
             urgency = 'HIGH'
             action = 'Spend limits - Monthly limit breached or high frequency'
         else:
@@ -319,27 +211,27 @@ def get_interventions(risk_result, profile):
             'action': action
         })
     
-    if factors['Session'] >= 10:  # Lower threshold for earlier intervention
-        urgency = 'CRITICAL' if factors['Session'] >= 18 else 'HIGH' if factors['Session'] >= 15 else 'MEDIUM'
+    if factors['Session'] >= RISK_THRESHOLDS['SESSION_LOW']:
+        urgency = 'CRITICAL' if factors['Session'] >= RISK_THRESHOLDS['SESSION_HIGH'] else 'HIGH' if factors['Session'] >= RISK_THRESHOLDS['SESSION_MEDIUM'] else 'MEDIUM'
         interventions.append({
             'type': 'Session Management',
             'urgency': urgency, 
             'action': 'Time limits and break reminders'
         })
     
-    if factors['Location'] >= 10:
-        urgency = 'HIGH' if factors['Location'] >= 15 else 'MEDIUM'
+    if factors['Location'] >= RISK_THRESHOLDS['LOCATION_LOW']:
+        urgency = 'HIGH' if factors['Location'] >= RISK_THRESHOLDS['LOCATION_HIGH'] else 'MEDIUM'
         interventions.append({
             'type': 'Location Monitoring',
             'urgency': urgency,
             'action': 'Venue alerts, GPS tracking, and safe zone reminders'
         })
     
-    if factors['Support'] >= 8:
-        if factors['Support'] >= 15:
+    if factors['Support'] >= RISK_THRESHOLDS['SUPPORT_LOW']:
+        if factors['Support'] >= RISK_THRESHOLDS['SUPPORT_HIGH']:
             urgency = 'CRITICAL'
             action = 'Immediate crisis intervention and counselor assignment'
-        elif factors['Support'] >= 12:
+        elif factors['Support'] >= RISK_THRESHOLDS['SUPPORT_MEDIUM']:
             urgency = 'HIGH'
             action = 'Priority counselor contact and support escalation'
         else:
@@ -378,13 +270,22 @@ def init_session():
 def main():
     st.markdown("""
     <style>
-    .main > div { padding-top: 0.5rem; font-family: 'Inter', sans-serif; }
-    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; border-radius: 15px; margin-bottom: 2rem; }
-    .card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); margin-bottom: 1.5rem; }
-    .stat-card { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; padding: 1.5rem; border-radius: 12px; text-align: center; }
+    @import url('https://fonts.googleapis.com/css2?family=Mulish:wght@400;600;700&display=swap');
+    
+    .main > div { padding-top: 0.5rem; font-family: 'Mulish', sans-serif; font-weight: 400; }
+    .header { background: #8F00BF; color: white; padding: 2rem; border-radius: 15px; margin-bottom: 2rem; }
+    .card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 10px 25px rgba(143, 0, 191, 0.1); margin-bottom: 1.5rem; border: 1px solid rgba(143, 0, 191, 0.1); }
+    .stat-card { background: #8F00BF; color: white; padding: 1.5rem; border-radius: 12px; text-align: center; }
     .risk-critical { background: #dc2626; box-shadow: 0 0 20px rgba(220, 38, 38, 0.5); }
     .risk-high { background: #f59e0b; box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
-    .nav-button { background: #3b82f6; color: white; padding: 0.5rem 1rem; border-radius: 8px; text-decoration: none; margin: 0 0.5rem; }
+    .nav-button { background: #8F00BF; color: white; padding: 0.5rem 1rem; border-radius: 8px; text-decoration: none; margin: 0 0.5rem; }
+    
+    h1, h2, h3, h4, h5, h6 { font-family: 'Mulish', sans-serif; font-weight: 600; color: #8F00BF; }
+    p, div, span, li { font-family: 'Mulish', sans-serif; font-weight: 400; }
+    .stButton > button { background-color: #8F00BF; color: white; border: none; font-family: 'Mulish', sans-serif; font-weight: 600; }
+    .stButton > button:hover { background-color: #7A00A3; }
+    .stSelectbox > div > div { font-family: 'Mulish', sans-serif; }
+    .stNumberInput > div > div > input { font-family: 'Mulish', sans-serif; }
     </style>
     """, unsafe_allow_html=True)
     
@@ -421,8 +322,8 @@ def main():
         <div style='display: flex; align-items: center; gap: 1rem;'>
             <div style='font-size: 2.5rem;'>🧬</div>
             <div>
-                <h1 style='margin: 0; font-size: 2rem; font-weight: 800;'>Customer DNA AI - Clean Logic</h1>
-                <p style='margin: 0.5rem 0 0 0; opacity: 0.9;'>Real-time Risk Assessment & Intervention System</p>
+                <h1 style='margin: 0; font-size: 2rem; font-weight: 600; font-family: Mulish, sans-serif;'>Customer DNA AI - Clean Logic</h1>
+                <p style='margin: 0.5rem 0 0 0; opacity: 0.9; font-family: Mulish, sans-serif; font-weight: 400;'>Real-time Risk Assessment & Intervention System</p>
             </div>
         </div>
     </div>
@@ -493,7 +394,7 @@ def main():
     col1, col2, col3 = st.columns([1, 1, 1])
     
     with col1:
-        st.markdown("<div class='card'><h3>👤 Customer Controls</h3>", unsafe_allow_html=True)
+        st.markdown("<div class='card'><h3 style='font-family: Mulish, sans-serif; font-weight: 600; color: #8F00BF;'>👤 Customer Controls</h3>", unsafe_allow_html=True)
         
         # Customer selection
         selected = st.selectbox("Select Customer", list(CUSTOMERS.keys()), 
@@ -524,26 +425,37 @@ def main():
         deposit_ratio = (total_deposits / monthly_income) if monthly_income > 0 else 0
         spend_ratio = (st.session_state.session_data['wagered'] / monthly_income) if monthly_income > 0 else 0
         
-        # AI Model Insights
-        ai_confidence = min(98, 85 + (risk_result['score'] / 100) * 13)
+        # Enhanced ML Learning Insights
+        ml_method = risk_result.get('ml_method', 'unknown')
+        ml_samples = risk_result.get('ml_samples', 0)
+        ai_confidence = risk_result['ml_confidence'] * 100
         crisis_probability = risk_result['score']
         days_to_crisis = max(1, 21 - int(crisis_probability * 0.2))
         
+        # ML Status
+        if ml_method == 'ml_prediction':
+            ml_status = f"ML Learning ({ml_samples} samples)"
+        elif ml_method == 'rule_based_fallback':
+            ml_status = f"ML Fallback ({ml_samples} samples)"
+        else:
+            ml_status = "Rule-based (Learning)"
+        
         st.markdown(f"""
-        <div style='background: #f8fafc; padding: 1rem; border-radius: 8px; margin: 1rem 0; font-size: 0.8rem;'>
-            <div><strong>Profile:</strong> {profile['age']}y, £{profile['income']:,}/year, {profile['risk_category']} Risk</div>
-            <div><strong>Limits:</strong> Monthly £{profile['monthly_limit']:,} | Current Balance: £{st.session_state.session_data['balance']:,.0f}</div>
-            <div><strong>Deposits:</strong> {deposit_count} deposits = £{total_deposits:,.0f} ({deposit_ratio:.1f}x monthly income)</div>
-            <div><strong>Wagers:</strong> {wager_count} wagers = £{st.session_state.session_data['wagered']:,.0f} ({spend_ratio:.1f}x monthly income)</div>
-            <div><strong>Status:</strong> {profile['emotional_state']}, Stress: {profile['financial_stress']}/10, Support: {profile['support_contacts'] + st.session_state.session_data['support_calls']}</div>
-            <div style='color: #dc2626; font-weight: bold;'><strong>🤖 AI Analysis:</strong> {ai_confidence:.1f}% confidence, Crisis in ~{days_to_crisis} days</div>
+        <div style='background: rgba(143, 0, 191, 0.05); padding: 1rem; border-radius: 8px; margin: 1rem 0; font-size: 0.8rem; border: 1px solid rgba(143, 0, 191, 0.2); font-family: Mulish, sans-serif;'>
+            <div><strong style='color: #8F00BF;'>Profile:</strong> {profile['age']}y, £{profile['income']:,}/year, {profile['risk_category']} Risk</div>
+            <div><strong style='color: #8F00BF;'>Limits:</strong> Monthly £{profile['monthly_limit']:,} | Current Balance: £{st.session_state.session_data['balance']:,.0f}</div>
+            <div><strong style='color: #8F00BF;'>Deposits:</strong> {deposit_count} deposits = £{total_deposits:,.0f} ({deposit_ratio:.1f}x monthly income)</div>
+            <div><strong style='color: #8F00BF;'>Wagers:</strong> {wager_count} wagers = £{st.session_state.session_data['wagered']:,.0f} ({spend_ratio:.1f}x monthly income)</div>
+            <div><strong style='color: #8F00BF;'>Status:</strong> {profile['emotional_state']}, Stress: {profile['financial_stress']}/10, Support: {profile['support_contacts'] + st.session_state.session_data['support_calls']}</div>
+            <div style='color: #8F00BF; font-weight: 600;'><strong>🤖 ML Analysis:</strong> {ml_status}</div>
+            <div style='color: #8F00BF; font-weight: 400; font-size: 0.75rem;'>Confidence: {ai_confidence:.1f}% | Crisis: ~{days_to_crisis} days | Learning: Active</div>
         </div>
         """, unsafe_allow_html=True)
         
         # Add Deposit - MONITORING ONLY
         col_dep, col_btn1 = st.columns([3, 1])
         with col_dep:
-            deposit_input = st.number_input("💰 Add Deposit", min_value=0.0, value=0.0, step=50.0, key="deposit_input")
+            deposit_input = st.number_input("💰 Add Deposit", min_value=0.0, max_value=float(VALIDATION_LIMITS['MAX_DEPOSIT']), value=0.0, step=50.0, key="deposit_input")
         with col_btn1:
             if st.button("Add", key="add_deposit"):
                 if deposit_input > 0:
@@ -566,7 +478,7 @@ def main():
                         st.error(f"🚨 ESCALATION: Total deposits £{total_deposits_now:,.0f} exceed 2x monthly income")
                     
                     st.success(f"✅ +£{deposit_input:,.0f}")
-                    st.rerun()
+                    safe_rerun()
                 else:
                     st.error("Enter amount > 0")
         
@@ -577,7 +489,8 @@ def main():
             if current_balance <= 0:
                 st.number_input("🎯 Place Wager", min_value=0.0, max_value=0.0, value=0.0, disabled=True, key="wager_input", help="Add deposit first to place wagers")
             else:
-                wager_input = st.number_input("🎯 Place Wager", min_value=0.0, max_value=current_balance, value=0.0, step=25.0, key="wager_input")
+                max_wager = float(min(current_balance, VALIDATION_LIMITS['MAX_WAGER']))
+                wager_input = st.number_input("🎯 Place Wager", min_value=0.0, max_value=max_wager, value=0.0, step=25.0, key="wager_input")
         with col_btn2:
             if st.button("Place", key="place_wager"):
                 current_balance = st.session_state.session_data['balance']
@@ -617,7 +530,7 @@ def main():
         # Session Time
         col_sess, col_btn3 = st.columns([3, 1])
         with col_sess:
-            session_input = st.number_input("⏱️ Session (min)", min_value=0, max_value=1440, value=st.session_state.session_data['session_time'], step=15, key="session_input")
+            session_input = st.number_input("⏱️ Session (min)", min_value=0, max_value=int(VALIDATION_LIMITS['MAX_SESSION_TIME']), value=int(st.session_state.session_data['session_time']), step=15, key="session_input")
         with col_btn3:
             if st.button("Set", key="set_session"):
                 st.session_state.session_data['session_time'] = int(session_input)
@@ -631,10 +544,13 @@ def main():
         location = st.selectbox("📍 Location", location_options, index=location_index, key="location_select")
         
         if location != st.session_state.session_data['location']:
-            # Track location history
+            # Track location history with limits
             if 'location_history' not in st.session_state.session_data:
                 st.session_state.session_data['location_history'] = []
             st.session_state.session_data['location_history'].append(location)
+            st.session_state.session_data['location_history'] = limit_location_history(
+                st.session_state.session_data['location_history']
+            )
             
             st.session_state.session_data['location'] = location
             
@@ -666,7 +582,11 @@ def main():
             if st.button("Contact", key="contact_support"):
                 st.session_state.session_data['support_calls'] += 1
                 
-                # Support escalation warnings
+                # Support escalation warnings with limits
+                if st.session_state.session_data['support_calls'] >= VALIDATION_LIMITS['MAX_SUPPORT_CALLS']:
+                    st.error("🚨 Maximum support contacts reached for today")
+                    return
+                
                 new_total = profile['support_contacts'] + st.session_state.session_data['support_calls']
                 if st.session_state.session_data['support_calls'] > 3:
                     st.error(f"🚨 High support frequency: {st.session_state.session_data['support_calls']} calls today")
@@ -697,7 +617,7 @@ def main():
         st.markdown("</div>", unsafe_allow_html=True)
     
     with col2:
-        st.markdown("<div class='card'><h3>🤖 AI Risk Assessment</h3>", unsafe_allow_html=True)
+        st.markdown("<div class='card'><h3 style='font-family: Mulish, sans-serif; font-weight: 600; color: #8F00BF;'>🤖 ML Risk Assessment</h3>", unsafe_allow_html=True)
         
         # Risk Gauge
         risk_score = risk_result['score']
@@ -741,7 +661,7 @@ def main():
         
         # AI-Enhanced Risk Breakdown
         st.markdown("<div style='margin-top: 2rem;'>", unsafe_allow_html=True)
-        st.markdown("<div style='font-weight: 700; margin-bottom: 1rem;'>🤖 AI Risk Analysis:</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-weight: 600; margin-bottom: 1rem; color: #8F00BF; font-family: Mulish, sans-serif;'>🤖 ML Risk Analysis:</div>", unsafe_allow_html=True)
         
         for factor, score in risk_result['factors'].items():
             color = "#dc2626" if score >= 20 else "#f59e0b" if score >= 15 else "#3b82f6" if score >= 10 else "#10b981"
@@ -760,15 +680,15 @@ def main():
         st.markdown("</div></div>", unsafe_allow_html=True)
     
     with col3:
-        st.markdown("<div class='card'><h3>🤖 AI Interventions</h3>", unsafe_allow_html=True)
+        st.markdown("<div class='card'><h3 style='font-family: Mulish, sans-serif; font-weight: 600; color: #8F00BF;'>🤖 ML Interventions</h3>", unsafe_allow_html=True)
         
         interventions = get_interventions(risk_result, profile)
         
         if interventions:
-            st.markdown("<div style='margin-bottom: 1rem; font-weight: 600; color: #dc2626;'>🤖 AI Recommended Actions:</div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-bottom: 1rem; font-weight: 600; color: #8F00BF; font-family: Mulish, sans-serif;'>🤖 ML Recommended Actions:</div>", unsafe_allow_html=True)
             
             # Add AI confidence for interventions
-            st.markdown(f"<div style='font-size: 0.8rem; color: #6b7280; margin-bottom: 1rem;'>AI Confidence: {ai_confidence:.1f}% | Crisis Probability: {crisis_probability:.0f}%</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size: 0.8rem; color: #8F00BF; margin-bottom: 1rem; font-family: Mulish, sans-serif;'>{ml_status} | Confidence: {ai_confidence:.1f}% | Risk: {crisis_probability:.0f}%</div>", unsafe_allow_html=True)
             
             for i, intervention in enumerate(interventions):
                 urgency_color = "#dc2626" if intervention['urgency'] == 'HIGH' else "#f59e0b"
@@ -796,8 +716,8 @@ def main():
                         'crisis_probability': crisis_probability
                     })
                     
-                    st.success(f"✅ AI-driven {intervention['type']} executed! Enhanced monitoring active.")
-                    st.info(f"🤖 AI Intervention logged at {datetime.now().strftime('%H:%M:%S')} | Confidence: {ai_confidence:.1f}%")
+                    st.success(f"✅ ML-driven {intervention['type']} executed! Enhanced monitoring active.")
+                    st.info(f"🤖 ML Intervention logged | {ml_status} | Confidence: {ai_confidence:.1f}%")
                     st.balloons()
                     time.sleep(1)
                     st.rerun()
@@ -807,7 +727,7 @@ def main():
                 <div style='font-size: 3rem; margin-bottom: 1rem;'>🤖✅</div>
                 <h3 style='margin: 0; color: #10b981;'>AI All Clear!</h3>
                 <p style='margin: 0.5rem 0 0 0; color: #059669;'>Customer within safe parameters</p>
-                <p style='margin: 0.5rem 0 0 0; color: #059669; font-size: 0.9rem;'>AI Confidence: {ai_confidence:.1f}%</p>
+                <p style='margin: 0.5rem 0 0 0; color: #059669; font-size: 0.9rem;'>{ml_status} | Confidence: {ai_confidence:.1f}%</p>
             </div>
             """, unsafe_allow_html=True)
         
