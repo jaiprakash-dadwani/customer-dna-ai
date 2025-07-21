@@ -1,62 +1,44 @@
 """
-Configuration settings for Customer DNA AI
+Configuration constants - Externalized magic numbers
 """
 
-# Risk level thresholds
-RISK_LEVELS = {
-    'LOW': 30,
-    'MEDIUM': 50,
-    'HIGH': 70,
-    'CRITICAL': 85
-}
-
-# Risk factor thresholds
+# Risk Calculation Thresholds
 RISK_THRESHOLDS = {
-    'DEPOSIT_LOW': 10,
+    'DEPOSIT_LOW': 8,
     'DEPOSIT_MEDIUM': 15,
-    'DEPOSIT_HIGH': 20,
-    'SPENDING_LOW': 10,
+    'DEPOSIT_HIGH': 22,
+    'SPENDING_LOW': 8,
     'SPENDING_MEDIUM': 15,
-    'SPENDING_HIGH': 20,
-    'SESSION_LOW': 8,
-    'SESSION_MEDIUM': 12,
-    'SESSION_HIGH': 16,
-    'LOCATION_LOW': 8,
-    'LOCATION_HIGH': 12,
+    'SPENDING_HIGH': 22,
+    'SESSION_LOW': 10,
+    'SESSION_MEDIUM': 15,
+    'SESSION_HIGH': 18,
+    'LOCATION_LOW': 10,
+    'LOCATION_HIGH': 15,
     'SUPPORT_LOW': 8,
     'SUPPORT_MEDIUM': 12,
     'SUPPORT_HIGH': 15
 }
 
-# Validation limits
-VALIDATION_LIMITS = {
-    'MAX_DEPOSIT': 50000,
-    'MAX_WAGER': 10000,
-    'MAX_SESSION_TIME': 720,
-    'MAX_SUPPORT_CALLS': 20,
-    'MAX_LOCATION_HISTORY': 50
+# Risk Level Boundaries
+RISK_LEVELS = {
+    'CRITICAL': 80,
+    'HIGH': 60,
+    'MEDIUM': 40,
+    'LOW': 0
 }
 
-# Profile multipliers for risk calculation
+# Input Validation Limits
+VALIDATION_LIMITS = {
+    'MAX_DEPOSIT': 50000,
+    'MAX_WAGER': 25000,
+    'MAX_SESSION_TIME': 1440,
+    'MAX_SUPPORT_CALLS': 20
+}
+
+# Profile Multipliers
 PROFILE_MULTIPLIERS = {
-    'Low': {
-        'deposit': 0.8,
-        'spending': 0.8,
-        'overall': 0.9
-    },
-    'Medium': {
-        'deposit': 1.0,
-        'spending': 1.0,
-        'overall': 1.0
-    },
-    'High': {
-        'deposit': 1.2,
-        'spending': 1.2,
-        'overall': 1.1
-    },
-    'Critical': {
-        'deposit': 1.5,
-        'spending': 1.5,
-        'overall': 1.3
-    }
+    'Critical': {'deposit': 1.4, 'spending': 1.3, 'support': 1.2, 'overall': 1.2},
+    'High': {'deposit': 1.2, 'spending': 1.1, 'support': 1.0, 'overall': 1.1},
+    'Medium': {'deposit': 1.0, 'spending': 1.0, 'support': 1.0, 'overall': 1.0}
 }
