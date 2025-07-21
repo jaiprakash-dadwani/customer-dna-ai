@@ -14,7 +14,7 @@ pip install -r requirements.txt
 
 2. Run the demo:
 ```bash
-streamlit run app.py
+streamlit run clean_logic_app.py
 ```
 
 3. Open your browser to `http://localhost:8501`
