@@ -11,22 +11,31 @@ from utils import safe_rerun, validate_input, limit_location_history
 
 st.set_page_config(page_title="Customer DNA AI - Clean Logic", page_icon="🧬", layout="wide")
 
-# Customer Profiles
+# Demo-Ready Customer Profiles - 3 Core Professions
 CUSTOMERS = {
-    "Sarah Martinez - Teacher": {
-        "age": 34, "income": 28000, "risk_category": "High",
-        "current_balance": 245, "monthly_limit": 800, "avg_session": 280,
-        "support_contacts": 8, "financial_stress": 8, "emotional_state": "Distressed"
+    "Sarah Martinez - Primary School Teacher": {
+        "age": 34, "income": 28000, "profession": "Teacher", "risk_category": "High",
+        "monthly_limit": 500, "avg_session": 180, "work_stress": "High",
+        "support_contacts": 6, "financial_stress": 8, "emotional_state": "Stressed",
+        "gambling_trigger": "Work pressure & low income", 
+        "spending_pattern": "Small frequent deposits during pay week",
+        "demo_scenario": "Shows high-risk teacher with financial stress"
     },
-    "Michael Thompson - Executive": {
-        "age": 42, "income": 65000, "risk_category": "Medium", 
-        "current_balance": 1250, "monthly_limit": 2000, "avg_session": 120,
-        "support_contacts": 2, "financial_stress": 4, "emotional_state": "Stable"
+    "Michael Thompson - Marketing Executive": {
+        "age": 42, "income": 65000, "profession": "Executive", "risk_category": "Medium",
+        "monthly_limit": 1200, "avg_session": 120, "work_stress": "Medium",
+        "support_contacts": 2, "financial_stress": 4, "emotional_state": "Controlled",
+        "gambling_trigger": "Social gambling & entertainment", 
+        "spending_pattern": "Moderate planned gambling budget",
+        "demo_scenario": "Shows medium-risk executive with disposable income"
     },
-    "David Chen - Business Owner": {
-        "age": 29, "income": 42000, "risk_category": "Critical",
-        "current_balance": 85, "monthly_limit": 5000, "avg_session": 420,
-        "support_contacts": 12, "financial_stress": 10, "emotional_state": "Crisis"
+    "David Chen - Restaurant Owner": {
+        "age": 29, "income": 42000, "profession": "Business Owner", "risk_category": "Critical",
+        "monthly_limit": 2000, "avg_session": 300, "work_stress": "Very High",
+        "support_contacts": 12, "financial_stress": 10, "emotional_state": "Desperate",
+        "gambling_trigger": "Business losses & cash flow issues", 
+        "spending_pattern": "Large desperate bets to recover losses",
+        "demo_scenario": "Shows critical-risk business owner in crisis"
     }
 }
 
@@ -177,16 +186,19 @@ def get_interventions(risk_result, profile):
     interventions = []
     factors = risk_result['factors']
     
+    # Map risk level to intervention urgency (matching colors)
+    overall_risk = risk_result['level']
+    
     if factors['Deposit'] >= RISK_THRESHOLDS['DEPOSIT_LOW']:
-        if factors['Deposit'] >= RISK_THRESHOLDS['DEPOSIT_HIGH']:
+        if overall_risk == 'CRITICAL':
             urgency = 'CRITICAL'
-            action = 'Immediate deposit intervention - Multiple large deposits detected'
-        elif factors['Deposit'] >= RISK_THRESHOLDS['DEPOSIT_MEDIUM']:
-            urgency = 'HIGH'
-            action = 'Deposit monitoring - Pattern of concern identified'
+            action = 'Immediate deposit intervention - Critical risk detected'
+        elif overall_risk == 'HIGH':
+            urgency = 'HIGH' 
+            action = 'Deposit monitoring - High risk pattern identified'
         else:
             urgency = 'MEDIUM'
-            action = 'Deposit tracking - Early warning triggered'
+            action = 'Deposit tracking - Preventive monitoring'
         
         interventions.append({
             'type': 'Deposit Controls',
@@ -195,15 +207,15 @@ def get_interventions(risk_result, profile):
         })
     
     if factors['Spending'] >= RISK_THRESHOLDS['SPENDING_LOW']:
-        if factors['Spending'] >= RISK_THRESHOLDS['SPENDING_HIGH']:
+        if overall_risk == 'CRITICAL':
             urgency = 'CRITICAL'
-            action = 'Immediate spend intervention - Excessive wagering detected'
-        elif factors['Spending'] >= RISK_THRESHOLDS['SPENDING_MEDIUM']:
+            action = 'Immediate spend intervention - Critical wagering detected'
+        elif overall_risk == 'HIGH':
             urgency = 'HIGH'
-            action = 'Spend limits - Monthly limit breached or high frequency'
+            action = 'Spend limits - High risk wagering pattern'
         else:
             urgency = 'MEDIUM'
-            action = 'Spend monitoring - Escalating wagering pattern'
+            action = 'Spend monitoring - Preventive measures'
         
         interventions.append({
             'type': 'Spend Management', 
@@ -212,31 +224,36 @@ def get_interventions(risk_result, profile):
         })
     
     if factors['Session'] >= RISK_THRESHOLDS['SESSION_LOW']:
-        urgency = 'CRITICAL' if factors['Session'] >= RISK_THRESHOLDS['SESSION_HIGH'] else 'HIGH' if factors['Session'] >= RISK_THRESHOLDS['SESSION_MEDIUM'] else 'MEDIUM'
+        if overall_risk == 'CRITICAL':
+            urgency = 'CRITICAL'
+        elif overall_risk == 'HIGH':
+            urgency = 'HIGH'
+        else:
+            urgency = 'MEDIUM'
         interventions.append({
             'type': 'Session Management',
             'urgency': urgency, 
-            'action': 'Time limits and break reminders'
+            'action': f'Session controls - {overall_risk.lower()} risk level'
         })
     
     if factors['Location'] >= RISK_THRESHOLDS['LOCATION_LOW']:
-        urgency = 'HIGH' if factors['Location'] >= RISK_THRESHOLDS['LOCATION_HIGH'] else 'MEDIUM'
+        urgency = 'HIGH' if overall_risk in ['CRITICAL', 'HIGH'] else 'MEDIUM'
         interventions.append({
             'type': 'Location Monitoring',
             'urgency': urgency,
-            'action': 'Venue alerts, GPS tracking, and safe zone reminders'
+            'action': f'Location alerts - {overall_risk.lower()} risk venue activity'
         })
     
     if factors['Support'] >= RISK_THRESHOLDS['SUPPORT_LOW']:
-        if factors['Support'] >= RISK_THRESHOLDS['SUPPORT_HIGH']:
+        if overall_risk == 'CRITICAL':
             urgency = 'CRITICAL'
-            action = 'Immediate crisis intervention and counselor assignment'
-        elif factors['Support'] >= RISK_THRESHOLDS['SUPPORT_MEDIUM']:
+            action = 'Immediate crisis intervention - Critical support needed'
+        elif overall_risk == 'HIGH':
             urgency = 'HIGH'
-            action = 'Priority counselor contact and support escalation'
+            action = 'Priority counselor contact - High risk support'
         else:
             urgency = 'MEDIUM'
-            action = 'Enhanced support monitoring and check-ins'
+            action = 'Enhanced support monitoring - Preventive care'
         
         interventions.append({
             'type': 'Enhanced Support',
@@ -244,9 +261,9 @@ def get_interventions(risk_result, profile):
             'action': action
         })
     
-    # Sort by urgency
-    urgency_order = {'HIGH': 0, 'MEDIUM': 1}
-    interventions.sort(key=lambda x: urgency_order.get(x['urgency'], 2))
+    # Sort by urgency (matching risk colors)
+    urgency_order = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2}
+    interventions.sort(key=lambda x: urgency_order.get(x['urgency'], 3))
     
     return interventions
 
@@ -332,24 +349,28 @@ def main():
     # Get current data with enhanced AI analysis
     profile = CUSTOMERS[st.session_state.session_data['customer']]
     
-    # Add occupation to profile for AI model
-    customer_name = st.session_state.session_data['customer']
-    if 'Teacher' in customer_name:
-        profile['occupation'] = 'Teacher'
-    elif 'Executive' in customer_name:
-        profile['occupation'] = 'Executive'
-    elif 'Business Owner' in customer_name:
-        profile['occupation'] = 'Business Owner'
-    else:
-        profile['occupation'] = 'Other'
+    # Add occupation to profile for ML model
+    profile['occupation'] = profile['profession']
     
     risk_result = calculate_risk(profile, st.session_state.session_data)
     
-    # Stats Cards
-    balance = st.session_state.session_data['balance']
+    # Stats Cards with validation
+    balance = max(0, st.session_state.session_data['balance'])  # Ensure non-negative
     wagered = st.session_state.session_data['wagered']
     session_time = st.session_state.session_data['session_time']
     support_calls = st.session_state.session_data['support_calls']
+    total_deposits = sum(st.session_state.session_data.get('deposits', []))
+    
+    # Validation: Wagered cannot exceed total deposits
+    if wagered > total_deposits and total_deposits > 0:
+        st.session_state.session_data['wagered'] = total_deposits
+        wagered = total_deposits
+    
+    # Validation: Balance = Deposits - Wagered
+    expected_balance = total_deposits - wagered
+    if abs(balance - expected_balance) > 0.01:
+        st.session_state.session_data['balance'] = expected_balance
+        balance = expected_balance
     
     # Risk-based highlighting
     deposit_class = 'risk-critical' if risk_result['factors']['Deposit'] >= 20 else 'risk-high' if risk_result['factors']['Deposit'] >= 15 else ''
@@ -416,7 +437,7 @@ def main():
             }
             st.rerun()
         
-        # Enhanced profile info with AI insights
+        # Enhanced profile info with profession-based insights
         total_deposits = sum(st.session_state.session_data.get('deposits', []))
         deposit_count = len(st.session_state.session_data.get('deposits', []))
         total_wagers = sum(st.session_state.session_data.get('wagers', []))
@@ -442,11 +463,12 @@ def main():
         
         st.markdown(f"""
         <div style='background: rgba(143, 0, 191, 0.05); padding: 1rem; border-radius: 8px; margin: 1rem 0; font-size: 0.8rem; border: 1px solid rgba(143, 0, 191, 0.2); font-family: Mulish, sans-serif;'>
-            <div><strong style='color: #8F00BF;'>Profile:</strong> {profile['age']}y, £{profile['income']:,}/year, {profile['risk_category']} Risk</div>
-            <div><strong style='color: #8F00BF;'>Limits:</strong> Monthly £{profile['monthly_limit']:,} | Current Balance: £{st.session_state.session_data['balance']:,.0f}</div>
-            <div><strong style='color: #8F00BF;'>Deposits:</strong> {deposit_count} deposits = £{total_deposits:,.0f} ({deposit_ratio:.1f}x monthly income)</div>
-            <div><strong style='color: #8F00BF;'>Wagers:</strong> {wager_count} wagers = £{st.session_state.session_data['wagered']:,.0f} ({spend_ratio:.1f}x monthly income)</div>
-            <div><strong style='color: #8F00BF;'>Status:</strong> {profile['emotional_state']}, Stress: {profile['financial_stress']}/10, Support: {profile['support_contacts'] + st.session_state.session_data['support_calls']}</div>
+            <div><strong style='color: #8F00BF;'>Profile:</strong> {profile['age']}y {profile['profession']}, £{profile['income']:,}/year, {profile['risk_category']} Risk</div>
+            <div><strong style='color: #8F00BF;'>Limits:</strong> Monthly £{profile['monthly_limit']:,} | Balance: £{st.session_state.session_data['balance']:,.0f}</div>
+            <div><strong style='color: #8F00BF;'>Activity:</strong> {deposit_count} deposits (£{total_deposits:,.0f}) | {wager_count} wagers (£{st.session_state.session_data['wagered']:,.0f})</div>
+            <div><strong style='color: #8F00BF;'>Status:</strong> {profile['emotional_state']} | Work Stress: {profile['work_stress']} | Financial: {profile['financial_stress']}/10</div>
+            <div><strong style='color: #8F00BF;'>Trigger:</strong> {profile['gambling_trigger']}</div>
+            <div><strong style='color: #8F00BF;'>Pattern:</strong> {profile['spending_pattern']}</div>
             <div style='color: #8F00BF; font-weight: 600;'><strong>🤖 ML Analysis:</strong> {ml_status}</div>
             <div style='color: #8F00BF; font-weight: 400; font-size: 0.75rem;'>Confidence: {ai_confidence:.1f}% | Crisis: ~{days_to_crisis} days | Learning: Active</div>
         </div>
@@ -496,34 +518,33 @@ def main():
                 current_balance = st.session_state.session_data['balance']
                 if current_balance <= 0:
                     st.error("🚨 No balance available! Add deposit first.")
-                elif 'wager_input' in st.session_state and st.session_state.wager_input > 0:
-                    wager_amount = st.session_state.wager_input
-                    if wager_amount <= current_balance:
-                        st.session_state.session_data['balance'] -= wager_amount
-                        st.session_state.session_data['wagered'] += wager_amount
-                        st.session_state.session_data['wagers'].append(wager_amount)
+                elif wager_input > 0:
+                    if wager_input <= current_balance:
+                        st.session_state.session_data['balance'] -= wager_input
+                        st.session_state.session_data['wagered'] += wager_input
+                        st.session_state.session_data['wagers'].append(wager_input)
                         
                         # Enhanced wager monitoring
                         monthly_income = profile['income'] / 12
                         monthly_limit = profile.get('monthly_limit', monthly_income)
                         new_total_wagered = st.session_state.session_data['wagered']
                         
-                        if profile['risk_category'] == 'Critical' and wager_amount > monthly_income * 0.3:
-                            st.error(f"🚨 CRITICAL ALERT: Large wager £{wager_amount:,.0f} for high-risk customer")
+                        if profile['risk_category'] == 'Critical' and wager_input > monthly_income * 0.3:
+                            st.error(f"🚨 CRITICAL ALERT: Large wager £{wager_input:,.0f} for high-risk customer")
                         elif new_total_wagered > monthly_limit:
                             st.error(f"🚨 LIMIT BREACH: Total wagered £{new_total_wagered:,.0f} exceeds monthly limit £{monthly_limit:,.0f}")
-                        elif wager_amount > monthly_income * 0.4:
-                            st.warning(f"⚠️ MONITOR: Large wager £{wager_amount:,.0f}")
+                        elif wager_input > monthly_income * 0.4:
+                            st.warning(f"⚠️ MONITOR: Large wager £{wager_input:,.0f}")
                         
                         # Frequency monitoring
                         wager_count = len(st.session_state.session_data['wagers'])
                         if wager_count > 8:
                             st.warning(f"⚠️ FREQUENCY ALERT: {wager_count} wagers placed")
                         
-                        st.success(f"✅ Wagered £{wager_amount:,.0f}")
+                        st.success(f"✅ Wagered £{wager_input:,.0f} | Balance: £{st.session_state.session_data['balance']:,.0f}")
                         st.rerun()
                     else:
-                        st.error(f"🚨 Insufficient balance! Available: £{current_balance:,.0f}")
+                        st.error(f"🚨 Insufficient balance! Available: £{current_balance:,.0f}, Requested: £{wager_input:,.0f}")
                 else:
                     st.error("Enter wager amount > 0")
         
@@ -691,13 +712,25 @@ def main():
             st.markdown(f"<div style='font-size: 0.8rem; color: #8F00BF; margin-bottom: 1rem; font-family: Mulish, sans-serif;'>{ml_status} | Confidence: {ai_confidence:.1f}% | Risk: {crisis_probability:.0f}%</div>", unsafe_allow_html=True)
             
             for i, intervention in enumerate(interventions):
-                urgency_color = "#dc2626" if intervention['urgency'] == 'HIGH' else "#f59e0b"
+                # Distinct colors for each intervention urgency level
+                if intervention['urgency'] == 'CRITICAL':
+                    urgency_color = "#dc2626"  # Red - Critical
+                    text_color = "white"
+                elif intervention['urgency'] == 'HIGH':
+                    urgency_color = "#f97316"  # Orange - High  
+                    text_color = "white"
+                elif intervention['urgency'] == 'MEDIUM':
+                    urgency_color = "#eab308"  # Yellow - Medium
+                    text_color = "black"
+                else:
+                    urgency_color = "#10b981"  # Green - Low
+                    text_color = "white"
                 
                 st.markdown(f"""
                 <div style='border: 2px solid {urgency_color}; border-radius: 8px; padding: 1rem; margin: 1rem 0;'>
                     <div style='display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;'>
                         <span style='font-weight: 700;'>{intervention['type']}</span>
-                        <span style='background: {urgency_color}; color: white; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.7rem;'>{intervention['urgency']}</span>
+                        <span style='background: {urgency_color}; color: {text_color}; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600;'>{intervention['urgency']}</span>
                     </div>
                     <div style='font-size: 0.85rem; color: #6b7280;'>{intervention['action']}</div>
                 </div>
@@ -718,8 +751,25 @@ def main():
                     
                     st.success(f"✅ ML-driven {intervention['type']} executed! Enhanced monitoring active.")
                     st.info(f"🤖 ML Intervention logged | {ml_status} | Confidence: {ai_confidence:.1f}%")
-                    st.balloons()
-                    time.sleep(1)
+                    
+                    # Professional success animation
+                    with st.spinner('Processing intervention...'):
+                        time.sleep(0.8)
+                    
+                    st.markdown("""
+                    <div style='background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 1rem; border-radius: 8px; margin: 1rem 0; text-align: center; animation: fadeIn 0.5s ease-in;'>
+                        <div style='font-size: 1.2rem; font-weight: 600;'>✓ Intervention Successfully Deployed</div>
+                        <div style='font-size: 0.9rem; opacity: 0.9; margin-top: 0.5rem;'>Customer protection measures now active</div>
+                    </div>
+                    <style>
+                    @keyframes fadeIn {
+                        from { opacity: 0; transform: translateY(-10px); }
+                        to { opacity: 1; transform: translateY(0); }
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
+                    
+                    time.sleep(1.5)
                     st.rerun()
         else:
             st.markdown(f"""
